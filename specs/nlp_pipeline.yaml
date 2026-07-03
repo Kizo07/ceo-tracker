@@ -1,0 +1,79 @@
+# =============================================================================
+# NLP Pipeline Ontology — models, thresholds, limits
+# =============================================================================
+# The Text -> NER -> Sentiment -> DB pipeline. Node id: nlp:<stage>.
+# Heavy models are loaded per-process (SCALE-001). All knobs below are
+# hardcoded today and are mirrored (as defaults) in config_schema.yaml.
+# =============================================================================
+
+pipeline: "text -> nlp:ner -> nlp:sentiment -> entity:CompanyMention"
+
+stages:
+
+  # ---------------------------------------------------------------------------
+  nlp:ner:
+    service: service:ner_svc
+    source: backend/app/services/ner.py
+    model:
+      name: en_core_web_sm
+      provider: spacy
+      pinned_in_requirements: false   # downloaded separately in Dockerfile
+      download_on_missing: true       # ner.py:34-37 runs subprocess download
+    entity_filter: ["ORG", "ORGANIZATION"]
+    matching:
+      known_companies_source: hardcoded_dict   # ner.py:145 KNOWN_COMPANIES (CONFIG-001)
+      normalization: "strip 'corporation', 'inc.', 'inc'"
+      match_rule: "lowercase equality OR substring containment"
+    context:
+      window_sentences: 3             # ner.py:71 (hardcoded)
+    execution:
+      mode: sync_inproc
+      memory: loaded_per_process      # SCALE-001
+    issues:
+      - CONFIG-001  # KNOWN_COMPANIES duplicates DB
+      - SCALE-001   # per-process model load
+      - DEPS-006    # model not pinned in requirements
+
+  # ---------------------------------------------------------------------------
+  nlp:sentiment:
+    service: service:sentiment_svc
+    source: backend/app/services/sentiment.py
+    model:
+      name: ProsusAI/finbert
+      provider: huggingface/transformers
+      pinned_in_requirements: false   # pulled by transformers at runtime
+      framework: torch==2.1.1         # DEPS-005: ~800MB image, no CPU wheel index
+    labels: [positive, negative, neutral]
+    label_map:
+      positive: positive
+      negative: negative
+      neutral:  neutral
+      LABEL_0:  neutral
+      LABEL_1:  positive
+      LABEL_2:  negative
+    limits:
+      max_input_chars: 500            # sentiment.py:88,181 (hardcoded; truncates)
+      model_max_tokens: 512
+    batching:
+      implemented: false              # analyze_batch just loops (sentiment.py:143)
+    device:
+      selection: "0 if torch.cuda.is_available() else -1"
+    execution:
+      mode: sync_inproc
+      invoked_from_request: true      # SCALE-002: blocks /api/ingest
+      memory: loaded_per_process      # SCALE-001
+    issues:
+      - SCALE-001  # per-process model load
+      - SCALE-002  # synchronous in request path
+      - DEPS-005   # heavy torch image
+      - CONFIG-008 # max_input_chars magic number
+
+# -----------------------------------------------------------------------------
+# Pipeline orchestration note
+# -----------------------------------------------------------------------------
+orchestration:
+  unified_service: service:ingestion_svc   # ingestion.py
+  duplicate_path: contract:POST_/api/ingest  # ARCH-002: re-implements pipeline inline
+  target_state: >
+    Route ALL ingestion (manual + RSS) through IngestionService; move heavy
+    inference off the request path onto Celery (SCALE-002).

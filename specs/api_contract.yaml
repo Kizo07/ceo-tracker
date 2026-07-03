@@ -1,0 +1,194 @@
+# =============================================================================
+# API Contract Ontology — source of truth for the FE/BE boundary
+# =============================================================================
+# Every endpoint as implemented today, with the response shape, status codes,
+# and whether it is validated by a Pydantic response_model or returns a raw
+# dict. Mismatches vs the frontend are flagged inline (CONTRACT-* / BUG-*).
+# Node id: contract:<METHOD>_<path>.
+#
+# Versioning: NO version prefix exists today (ARCH-007). Target: /api/v1.
+# =============================================================================
+
+base_path: /api
+versioning:
+  current: none
+  target: "/api/v1 prefix"
+
+# -----------------------------------------------------------------------------
+endpoints:
+
+  # --- Mentions ---------------------------------------------------------------
+  contract:GET_/api/mentions:
+    source: backend/app/api/mentions.py:42
+    response_model: MentionListResponse   # validated
+    query: { page: int, page_size: int, ceo_id: "int?", company_ticker: "str?", sentiment: "str?" }
+    response: { mentions: [MentionResponse], total: int, page: int, page_size: int }
+    status: [200]
+    notes: ["ceo_id filter joins Speech; NULL-speech mentions excluded by that filter."]
+
+  contract:GET_/api/mentions/ceo/{ceo_id}:
+    source: backend/app/api/mentions.py:127
+    response_model: List[MentionResponse]
+    response: "[MentionResponse] (unpaginated)"
+    status: [200]
+
+  contract:GET_/api/mentions/company/{ticker}:
+    source: backend/app/api/mentions.py:159
+    response_model: List[MentionResponse]
+    status: [200, 404]
+
+  contract:GET_/api/sentiment/summary/{ceo_id}:
+    source: backend/app/api/mentions.py:208
+    response_model: none   # raw dict
+    response: { total: int, positive: int, negative: int, neutral: int, unknown: int }
+
+  # --- CEOs / Companies -------------------------------------------------------
+  contract:GET_/api/ceos:
+    source: backend/app/api/ceos.py:29
+    response_model: List[CEOResponse]
+    issues: [CONTRACT-005]   # FE declares created_at/updated_at not returned
+
+  contract:GET_/api/ceos/{ceo_id}:
+    source: backend/app/api/ceos.py:50
+    response_model: CEOResponse
+    status: [200, 404]
+
+  contract:GET_/api/companies:
+    source: backend/app/api/companies.py:28
+    response_model: List[CompanyResponse]   # BARE ARRAY
+    query: { is_tracked: "bool?" }
+    issues:
+      - CONTRACT-001   # FE types response as { items: Company[] } -> consumers break
+
+  contract:GET_/api/companies/{company_id}:
+    source: backend/app/api/companies.py:51
+    response_model: CompanyResponse
+    status: [200, 404]
+
+  contract:GET_/api/companies/ticker/{ticker}:
+    source: backend/app/api/companies.py:68
+    response_model: CompanyResponse
+    status: [200, 404]
+
+  # --- Dashboard / Timeline ---------------------------------------------------
+  contract:GET_/api/dashboard:
+    source: backend/app/api/dashboard.py:27
+    response_model: DashboardStats
+    response:
+      total_mentions: int
+      total_ceos: int
+      total_companies: int
+      sentiment_breakdown: { "<sentiment|null>": int }   # keys are dynamic strings
+      recent_mentions: int
+      most_mentioned_companies: "[{name, ticker, count}]"
+      most_active_ceos: "[{name, company, speeches}]"
+    issues:
+      - CONTRACT-006   # sentiment_breakdown keys dynamic; FE assumes fixed {positive,...}
+
+  contract:GET_/api/timeline:
+    source: backend/app/api/dashboard.py:94
+    response_model: none   # raw list of dicts
+    query: { limit: int = 20 }
+    response: "[{ id, ceo, mentioned_company, ticker, context, sentiment, created_at }]"
+    issues:
+      - BUG-001   # crashes: speech may be None -> AttributeError
+      - BUG-002   # field 'ceo' but FE expects 'ceo_name'
+
+  contract:GET_/api/dashboard/sentiment/{sentiment}:
+    source: backend/app/api/dashboard.py:124
+    response_model: none
+    response: "[{ name, ticker, count }]"
+
+  # --- Ingestion --------------------------------------------------------------
+  contract:POST_/api/ingest:
+    source: backend/app/api/ingest.py:34
+    request: { text: str, ceo_id: int, source_type: "str?", title: "str?", url: "str?" }
+    response_model: IngestResponse   # { success, message, mentions_created, speech_id? }
+    status: [200, 404]
+    issues:
+      - SCALE-002  # runs NER+FinBERT synchronously
+      - CONTRACT-004  # FE types speech_id as required number; backend Optional
+
+  contract:POST_/api/ingest/test:
+    source: backend/app/api/ingest.py:129
+    response_model: none
+    issues: [CONFIG-010]   # sample text hardcoded
+
+  contract:GET_/api/ingest/status:
+    source: backend/app/api/ingest.py:173
+    response_model: none
+    response:
+      total_sources: int
+      processed_sources: int
+      pending_sources: int
+      processing_rate: string   # e.g. "85.7%" (formatted at ingest.py:184)
+
+  # --- Feeds ------------------------------------------------------------------
+  contract:GET_/api/feeds/config:
+    source: backend/app/api/feeds.py:59
+    response_model: FeedListResponse
+
+  contract:GET_/api/feeds/status:
+    source: backend/app/api/feeds.py:85
+    response_model: none
+    response: { feeds: [FeedStatus], total_feeds: int }
+
+  contract:POST_/api/feeds/trigger:
+    source: backend/app/api/feeds.py:128
+    request: { feed_key: str }
+    response_model: TriggerFeedResponse   # { success, message, task_id? }
+    issues: [CONTRACT-003]   # task_id returned but no status endpoint to poll it
+
+  contract:POST_/api/feeds/refresh:
+    source: backend/app/api/feeds.py:155
+    response_model: RefreshFeedsResponse   # { success, message, total_entries?, total_mentions? }
+    issues:
+      - CONTRACT-002   # handler returns task_id but model has NO task_id field -> dropped
+
+  contract:POST_/api/feeds/test:
+    source: backend/app/api/feeds.py:178
+    response_model: none
+    query: { feed_key: str }
+
+  contract:GET_/api/feeds/stats:
+    source: backend/app/api/feeds.py:214
+    response_model: none
+    response:
+      sources_by_provider:
+        rss: int
+        finnhub: int
+        manual: int
+        total: int
+      total_mentions: int
+      unprocessed_sources: int
+
+# -----------------------------------------------------------------------------
+# Serialization policy (CONTRACT-006)
+# -----------------------------------------------------------------------------
+serialization:
+  validated:   "Endpoints with response_model: Pydantic enforces the shape."
+  raw_dict:    "Endpoints returning plain dict/list: no validation, drift-prone."
+  inconsistent_endpoints:
+    - contract:GET_/api/timeline
+    - contract:GET_/api/sentiment/summary/{ceo_id}
+    - contract:GET_/api/dashboard/sentiment/{sentiment}
+    - contract:GET_/api/feeds/status
+    - contract:GET_/api/feeds/stats
+    - contract:POST_/api/feeds/test
+    - contract:GET_/api/ingest/status
+    - contract:POST_/api/ingest/test
+
+# -----------------------------------------------------------------------------
+# Deployment / origin contract (CONTRACT-007)
+# -----------------------------------------------------------------------------
+deployment:
+  cors_origins: ["http://localhost:3000", "http://localhost:5173"]   # main.py:22
+  docker:
+    frontend_env: "VITE_API_URL=http://backend:8000"   # compose:94
+    problem: >
+      Container-internal hostname 'backend' is not resolvable by the browser.
+      Works only because nginx proxies same-origin /api (nginx.conf:11). The
+      env var is misleading and breaks any direct (non-proxied) API call.
+  recommended: >
+    In Docker, omit VITE_API_URL (use same-origin relative '/api') and rely on
+    the nginx proxy; keep VITE_API_URL only for local dev (vite proxy).

@@ -1,0 +1,146 @@
+# =============================================================================
+# Domain Ontology — entities, attributes, relationships, constraints
+# =============================================================================
+# Models the persisted domain. `status: current` reflects today's schema
+# (backend/app/models/__init__.py). `status: proposed` marks the target state
+# recommended by issues.yaml. Each entity has a stable node id `entity:<Name>`.
+# =============================================================================
+
+entities:
+
+  # ---------------------------------------------------------------------------
+  entity:Company:
+    table: companies
+    source: backend/app/models/__init__.py:13
+    description: >
+      A company. Either a top-N tracked company (has CEOs we monitor) or a
+      company that is merely mentioned by others (is_tracked=false).
+    attributes:
+      id:            { type: integer, pk: true }
+      ticker:        { type: string(10), unique: true, nullable: true, indexed: false }
+      name:          { type: string(255), unique: true, nullable: false, indexed: true }
+      is_tracked:    { type: boolean, default: true, indexed: true }
+      sector:        { type: string(100), nullable: true }
+      industry:      { type: string(100), nullable: true }
+      created_at:    { type: datetime, default: utcnow, nullable: true }
+      updated_at:    { type: datetime, default: utcnow, onupdate: utcnow, nullable: true }
+    relationships:
+      has_ceos:            { to: entity:CEO, type: one-to-many, back_populates: company }
+      receives_mentions:   { to: entity:CompanyMention, type: one-to-many, fk: mentioned_company_id }
+    constraints:
+      - "ticker uniqueness is nullable-unique; a company may have no ticker"
+    issues:
+      - ARCH-004  # is_tracked semantics inconsistent (init_db marks all 20 tracked)
+
+  # ---------------------------------------------------------------------------
+  entity:CEO:
+    table: ceos
+    source: backend/app/models/__init__.py:31
+    description: An executive we track (typically the CEO of a tracked company).
+    attributes:
+      id:              { type: integer, pk: true }
+      name:            { type: string(255), nullable: false, indexed: true }
+      company_id:      { type: integer, fk: companies.id, nullable: false }
+      title:           { type: string(100), nullable: true }
+      twitter_handle:  { type: string(100), nullable: true }
+      created_at:      { type: datetime, nullable: true }
+      updated_at:      { type: datetime, nullable: true }
+    relationships:
+      belongs_to:  { to: entity:Company, type: many-to-one, back_populates: has_ceos }
+      gives:       { to: entity:Speech, type: one-to-many, back_populates: ceo }
+
+  # ---------------------------------------------------------------------------
+  entity:Source:
+    table: sources
+    source: backend/app/models/__init__.py:48
+    description: >
+      An article / press release / transcript that text was ingested from.
+      Stores raw_text and tracks processing state.
+    attributes:
+      id:            { type: integer, pk: true }
+      url:           { type: text, unique: true, nullable: true }
+      title:         { type: string(500), nullable: true }
+      source_type:   { type: string(50), nullable: true, indexed: true }   # manual | press_release | ...
+      provider:      { type: string(100), nullable: true }                 # rss | finnhub | manual
+      published_at:  { type: datetime, nullable: true, indexed: true }
+      fetched_at:    { type: datetime, default: utcnow, nullable: true }
+      raw_text:      { type: text, nullable: true }
+      processed:     { type: boolean, default: false, indexed: true }
+      created_at:    { type: datetime, nullable: true }
+      updated_at:    { type: datetime, nullable: true }
+    relationships:
+      has_speeches: { to: entity:Speech, type: one-to-many, back_populates: source }
+    constraints:
+      - "url uniqueness used for dedup (feeds.py:266)"
+    issues:
+      - BUG-004     # cleanup deletes by published_at; NULL rows never removed
+      - SCALE-005   # raw_text unbounded growth; no truncation
+
+  # ---------------------------------------------------------------------------
+  entity:Speech:
+    table: speeches
+    source: backend/app/models/__init__.py:68
+    description: >
+      A CEO quote/commentary block tied to a Source. Only created when a CEO
+      speaker is known (manual ingest). Press releases have NO Speech.
+    attributes:
+      id:           { type: integer, pk: true }
+      source_id:    { type: integer, fk: sources.id, nullable: false }
+      ceo_id:       { type: integer, fk: ceos.id, nullable: false }
+      quote_text:   { type: text, nullable: false }
+      mentioned_at: { type: datetime, nullable: true, indexed: true }
+      created_at:   { type: datetime, nullable: true }
+    relationships:
+      from_source: { to: entity:Source, type: many-to-one, back_populates: has_speeches }
+      by_ceo:      { to: entity:CEO, type: many-to-one, back_populates: gives }
+      has_mentions: { to: entity:CompanyMention, type: one-to-many, back_populates: speech }
+    notes:
+      - "mentioned_at is indexed but unused by current queries (queries use created_at)."
+
+  # ---------------------------------------------------------------------------
+  entity:CompanyMention:
+    table: company_mentions
+    source: backend/app/models/__init__.py:85
+    description: >
+      The core fact: a company was mentioned (by a CEO speech, or in a press
+      release) with surrounding context and a sentiment label.
+    attributes:
+      id:                   { type: integer, pk: true }
+      speech_id:            { type: integer, fk: speeches.id, nullable: true, indexed: false }
+      mentioned_company_id: { type: integer, fk: companies.id, nullable: false }
+      context_text:         { type: text, nullable: false }
+      sentiment:            { type: string(20), nullable: true, indexed: true }   # positive|negative|neutral
+      sentiment_confidence: { type: float, nullable: true }
+      relationship_type:    { type: string(50), nullable: true }                  # competitor|partner|...
+      created_at:           { type: datetime, nullable: true, indexed: false }
+    relationships:
+      from_speech:   { to: entity:Speech, type: many-to-one, back_populates: has_mentions, optional: true }
+      about_company: { to: entity:Company, type: many-to-one, back_populates: receives_mentions }
+    constraints:
+      - "speech_id is nullable: RSS/press-release mentions have NO speech."
+    target_state:
+      - id: add_source_fk
+        status: proposed
+        change: "Add source_id FK (nullable) so press-release mentions keep provenance."
+        rationale: "Today a NULL speech_id means no path back to Source (url/title). See ARCH-003."
+      - id: index_created_at
+        status: proposed
+        change: "Index created_at (timeline orders/filters on it)."
+        rationale: "Missing index forces ORDER BY scans. See SCALE-004."
+    issues:
+      - ARCH-003   # no FK to Source -> lost provenance for RSS mentions
+      - SCALE-004  # created_at not indexed
+      - BUG-001    # timeline assumes speech non-None -> AttributeError
+      - BUG-002    # timeline returns field 'ceo' but FE expects 'ceo_name'
+
+# -----------------------------------------------------------------------------
+# Cross-entity relationship summary (for quick reading)
+# -----------------------------------------------------------------------------
+relationship_graph:
+  - { from: entity:Company,   rel: 1--N, to: entity:CEO }
+  - { from: entity:CEO,       rel: 1--N, to: entity:Speech }
+  - { from: entity:Source,    rel: 1--N, to: entity:Speech }
+  - { from: entity:Speech,    rel: 1--N, to: entity:CompanyMention }
+  - { from: entity:Company,   rel: 1--N, to: entity:CompanyMention, via: mentioned_company_id }
+  # proposed:
+  - { from: entity:Source,    rel: 1--N, to: entity:CompanyMention, status: proposed }

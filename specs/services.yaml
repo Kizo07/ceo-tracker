@@ -1,0 +1,194 @@
+# =============================================================================
+# Service / Component Ontology
+# =============================================================================
+# Maps runtime components: responsibilities, dependencies, datastores, and
+# execution model (sync request-path vs async worker). Node id: service:<id>.
+# =============================================================================
+
+components:
+
+  # ---------------------------------------------------------------------------
+  # --- API layer (FastAPI) ----------------------------------------------------
+  # ---------------------------------------------------------------------------
+  service:mentions_api:
+    type: api_router
+    source: backend/app/api/mentions.py
+    responsibilities:
+      - "List mentions (paginated, filterable by ceo/ticker/sentiment)."
+      - "Per-CEO and per-company mention views."
+      - "Per-CEO sentiment summary."
+    depends_on: [service:db, entity:CompanyMention, entity:Speech, entity:CEO, entity:Company]
+    execution: sync_request
+    issues:
+      - ARCH-001   # N+1 queries (3-4 queries per mention)
+
+  service:dashboard_api:
+    type: api_router
+    source: backend/app/api/dashboard.py
+    responsibilities:
+      - "Aggregate stats, sentiment breakdown, top-mentioned, most-active CEOs."
+      - "Chronological timeline feed."
+      - "Companies by sentiment."
+    depends_on: [service:db, entity:CompanyMention, entity:Speech, entity:CEO, entity:Company]
+    execution: sync_request
+    issues:
+      - ARCH-001   # N+1 in timeline
+      - BUG-001    # timeline crashes on NULL speech_id
+      - BUG-002    # field name 'ceo' vs 'ceo_name'
+      - SCALE-003  # no caching; recomputes aggregates each call
+
+  service:ceos_api:
+    type: api_router
+    source: backend/app/api/ceos.py
+    responsibilities: ["List/get CEOs."]
+    depends_on: [service:db, entity:CEO, entity:Company]
+    execution: sync_request
+
+  service:companies_api:
+    type: api_router
+    source: backend/app/api/companies.py
+    responsibilities: ["List/get companies (optionally by tracked flag)."]
+    depends_on: [service:db, entity:Company]
+    execution: sync_request
+    issues:
+      - CONTRACT-001  # returns bare array; FE expects {items}
+
+  service:ingest_api:
+    type: api_router
+    source: backend/app/api/ingest.py
+    responsibilities:
+      - "Manual text ingestion (CEO speaker)."
+      - "Test endpoint with sample text."
+      - "Ingestion status stats."
+    depends_on: [service:db, service:ner_svc, service:sentiment_svc, entity:Company, entity:CEO, entity:Source, entity:Speech, entity:CompanyMention]
+    execution: sync_request
+    issues:
+      - ARCH-002   # duplicates IngestionService pipeline
+      - SCALE-002  # runs ML synchronously in the request path
+
+  service:feeds_api:
+    type: api_router
+    source: backend/app/api/feeds.py
+    responsibilities:
+      - "List/monitor RSS feeds; trigger single/all; preview without saving; stats."
+    depends_on: [service:feed_svc, service:ingestion_svc, service:celery_worker, service:db]
+    execution: sync_request
+    issues:
+      - CONTRACT-002  # /feeds/refresh response model omits task_id
+      - CONTRACT-003  # no endpoint exposes task status
+
+  # ---------------------------------------------------------------------------
+  # --- NLP services -----------------------------------------------------------
+  # ---------------------------------------------------------------------------
+  service:ner_svc:
+    type: nlp_service
+    source: backend/app/services/ner.py
+    responsibilities: ["Extract ORG entities; match against known companies; context window."]
+    depends_on: [nlp:ner, config:nlp.known_companies]
+    execution: sync_inproc
+    lifecycle: "singleton per process (module global at ner.py:183)"
+    issues:
+      - SCALE-001  # model held per process
+      - CONFIG-001 # KNOWN_COMPANIES dict duplicates DB
+
+  service:sentiment_svc:
+    type: nlp_service
+    source: backend/app/services/sentiment.py
+    responsibilities: ["FinBERT sentiment classification (positive/negative/neutral) + confidence."]
+    depends_on: [nlp:sentiment]
+    execution: sync_inproc
+    lifecycle: "singleton per process (module global at sentiment.py:220)"
+    notes:
+      - "analyze_batch() just loops; no GPU/true batching (sentiment.py:143)."
+    issues:
+      - SCALE-001  # model held per process
+      - SCALE-002  # called synchronously from ingest request
+
+  # ---------------------------------------------------------------------------
+  # --- Orchestration ----------------------------------------------------------
+  # ---------------------------------------------------------------------------
+  service:ingestion_svc:
+    type: domain_service
+    source: backend/app/services/ingestion.py
+    responsibilities:
+      - "Unified pipeline: text -> Source -> (optional Speech) -> NER -> sentiment -> CompanyMention."
+      - "process_text (CEO speaker) and process_rss_entry (press release, no speech)."
+      - "get_or_create company; ingestion stats."
+    depends_on: [service:db, service:ner_svc, service:sentiment_svc, entity:Source, entity:Speech, entity:CompanyMention, entity:Company]
+    execution: sync_inproc
+    notes:
+      - "process_rss_entry creates mentions with speech_id=NULL (press releases)."
+
+  service:feed_svc:
+    type: integration_service
+    source: backend/app/services/feeds.py
+    responsibilities:
+      - "Load feeds config (feeds.yaml); fetch+parse RSS; strip HTML; dedup by URL."
+    depends_on: [service:db, source:rss:*, config:sources.rss.lookback_days]
+    execution: sync_inproc
+    issues:
+      - ARCH-005   # duplicate logger definition
+      - SCALE-005  # no conditional GET (ETag); O(n) dedup
+      - CONFIG-007 # hardcoded absolute config path
+
+  service:finnhub_svc:
+    type: integration_service
+    source: backend/app/services/finnhub.py
+    responsibilities: ["Fetch company news/press releases from Finnhub API (optional/premium)."]
+    depends_on: [config:api.finnhub.rate_limit_seconds]
+    execution: sync_inproc
+    notes:
+      - "Requires FINNHUB_API_KEY; premium endpoints may be unavailable."
+
+  # ---------------------------------------------------------------------------
+  # --- Async workers ----------------------------------------------------------
+  # ---------------------------------------------------------------------------
+  service:celery_worker:
+    type: worker
+    source: backend/workers/tasks.py
+    responsibilities:
+      - "fetch_rss_feed(key), fetch_all_feeds(), fetch_finnhub_news(symbols), cleanup_old_sources()."
+    depends_on: [service:celery_broker, service:feed_svc, service:ingestion_svc, service:finnhub_svc, service:db]
+    execution: async_worker
+    config_source: backend/workers/celery_app.py
+    issues:
+      - BUG-003    # fetch_all_feeds calls tasks synchronously (not .delay())
+      - SCALE-006  # prefetch=1, no retry/backoff
+      - BUG-004    # cleanup deletes by published_at; NULL rows kept
+
+  service:celery_beat:
+    type: scheduler
+    source: backend/workers/beat_config.py
+    responsibilities: ["Periodic schedule: poll 5 feeds every 4h; daily cleanup."]
+    depends_on: [service:celery_worker]
+    execution: async_scheduler
+    issues:
+      - CONFIG-004  # duplicates feed URLs; only 5 of 20 feeds scheduled
+
+  # ---------------------------------------------------------------------------
+  # --- Infrastructure ---------------------------------------------------------
+  # ---------------------------------------------------------------------------
+  service:db:
+    type: datastore
+    source: backend/app/db/database.py
+    engine: postgresql   # dev falls back to sqlite (SQLite bottleneck: SCALE-008)
+    responsibilities: ["Persistence + session management (SQLAlchemy)."]
+    pool: "web: pool_size=10, max_overflow=20 (Postgres only); celery: default pool"
+    issues:
+      - ARCH-006  # deprecated declarative_base import
+      - SCALE-008 # sqlite locking under concurrency (dev)
+
+  service:celery_broker:
+    type: queue
+    technology: redis   # also used as Celery result backend
+    responsibilities: ["Celery broker + result backend."]
+    notes: ["Not otherwise used as an app cache (SCALE-003)."]
+
+# -----------------------------------------------------------------------------
+# Execution model legend
+# -----------------------------------------------------------------------------
+execution_models:
+  sync_request:  "Runs inside a FastAPI request handler; blocks the HTTP worker."
+  sync_inproc:   "Synchronous call within a process (service invoked directly)."
+  async_worker:  "Executed by a Celery worker process."
+  async_scheduler: "Celery Beat periodic trigger."

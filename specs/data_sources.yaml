@@ -1,0 +1,81 @@
+# =============================================================================
+# Data Sources Ontology — ingestion providers, polling, dedup
+# =============================================================================
+# External content sources. Node id: source:<provider>:<key>.
+# Config files referenced:
+#   backend/config/feeds.yaml      (canonical feed list, 20 feeds)
+#   backend/workers/beat_config.py (duplicate feed list, only 5 feeds)
+# =============================================================================
+
+providers:
+
+  # ---------------------------------------------------------------------------
+  source:rss:
+    type: rss
+    service: service:feed_svc
+    config_file: backend/config/feeds.yaml
+    schedule_file: backend/workers/beat_config.py
+    polling:
+      interval: every 4h
+      max_entries_per_feed: 50
+      lookback_days: 90            # feeds.yaml schedule.lookback_days
+      lookback_default_in_code: 7  # feeds.py fallback if config missing -> drift
+    http:
+      client: requests              # DEPS-004: second client alongside httpx
+      user_agent: "Mozilla/5.0 ... Chrome/91..."
+      timeout_seconds: 10
+      conditional_get: false        # SCALE-005: no ETag / If-Modified-Since
+    dedup:
+      strategy: url_equality        # feeds.py:266 -> Source.url unique
+      cost: "O(n) DB lookup per entry per poll"
+    html_stripping:
+      method: regex                 # feeds.py:249 (beautifulsoup4 declared but unused -> DEPS-002)
+    feeds:
+      # Canonical list (feeds.yaml). company_id assumes sequential DB ids (CONFIG-003).
+      - { key: apple,      ticker: AAPL,  company_id: 1,  beat_scheduled: true }
+      - { key: microsoft,  ticker: MSFT,  company_id: 2,  beat_scheduled: true }
+      - { key: nvidia,     ticker: NVDA,  company_id: 3,  beat_scheduled: true }
+      - { key: alphabet,   ticker: GOOGL, company_id: 4,  beat_scheduled: true }
+      - { key: amazon,     ticker: AMZN,  company_id: 5,  beat_scheduled: true }
+      - { key: meta,       ticker: META,  company_id: 6,  beat_scheduled: false }
+      - { key: tesla,      ticker: TSLA,  company_id: 7,  beat_scheduled: false }
+      - { key: berkshire,  ticker: BRK.B, company_id: 8,  beat_scheduled: false }
+      - { key: broadcom,   ticker: AVGO,  company_id: 9,  beat_scheduled: false }
+      - { key: lilly,      ticker: LLY,   company_id: 10, beat_scheduled: false }
+      - { key: tsm,        ticker: TSM,   company_id: 11, beat_scheduled: false }
+      - { key: novo,       ticker: NVO,   company_id: 12, beat_scheduled: false }
+      - { key: walmart,    ticker: WMT,   company_id: 13, beat_scheduled: false }
+      - { key: jpmorgan,   ticker: JPM,   company_id: 14, beat_scheduled: false }
+      - { key: visa,       ticker: V,     company_id: 15, beat_scheduled: false }
+      - { key: mastercard, ticker: MA,    company_id: 16, beat_scheduled: false }
+      - { key: adobe,      ticker: ADBE,  company_id: 17, beat_scheduled: false }
+      - { key: netflix,    ticker: NFLX,  company_id: 18, beat_scheduled: false }
+      - { key: costco,     ticker: COST,  company_id: 19, beat_scheduled: false }
+      - { key: paypal,     ticker: PYPL,  company_id: 20, beat_scheduled: false }
+    issues:
+      - CONFIG-003  # company_id 1..20 assumes sequential DB ids
+      - CONFIG-004  # beat_config duplicates URLs and schedules only 5 of 20
+      - SCALE-005   # no conditional GET; re-evaluates lookback each poll
+
+  # ---------------------------------------------------------------------------
+  source:finnhub:
+    type: rest_api
+    service: service:finnhub_svc
+    base_url: https://finnhub.io/api/v1
+    auth: FINNHUB_API_KEY   # optional; empty by default
+    rate_limit:
+      free_tier: "60 calls/min"
+      enforced_delay_seconds: 1.0   # finnhub.py:26
+    endpoints_used: ["/news", "/press-releases"]
+    notes:
+      - "Press releases may be a premium feature; falls back to filtering /news."
+      - "Finnhub polling task is commented out in beat_config (not scheduled)."
+    issues: []
+
+# -----------------------------------------------------------------------------
+# Ingestion fan-out model
+# -----------------------------------------------------------------------------
+fan_out:
+  fetch_all_feeds:
+    implemented: false   # BUG-003: calls fetch_rss_feed() synchronously, not .delay()
+    target: "Use celery group/chord for parallel per-feed tasks."
