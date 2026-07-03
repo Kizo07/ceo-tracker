@@ -42,8 +42,14 @@ jobs:
       # app or models fail to import, before pytest's conftest masking kicks in.
       - name: Import smoke
         run: |
-          python -c "import app.models; print('models OK')"
-          python -c "from app.main import app; print('main OK')"
+          set +e
+          which python
+          python -c "import os,sys;print('cwd=',os.getcwd());print('sys.path[:6]=',sys.path[:6])"
+          python -c "import app;print('app.__file__=',getattr(app,'__file__',None));print('app.__path__=',list(getattr(app,'__path__',[])))"
+          python -c "import app.models as m;print('models OK',m.__file__)"
+          python -c "from app.main import app;print('main OK')"
+          echo "--- ls app/models (from cwd) ---"; ls -la app/models 2>&1 | head
+          exit 0
 
       - name: Pytest
         run: pytest
