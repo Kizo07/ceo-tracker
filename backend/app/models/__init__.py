@@ -2,11 +2,10 @@
 SQLAlchemy models for CEO Tracker database.
 """
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Float, Text, ForeignKey, Enum
+    Column, Integer, String, Boolean, DateTime, Float, Text, ForeignKey
 )
 from sqlalchemy.orm import relationship
 from ..db.database import Base
-import enum
 from datetime import datetime
 
 
