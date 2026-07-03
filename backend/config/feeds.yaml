@@ -1,0 +1,174 @@
+# RSS Feed Configuration for CEO Tracker
+# Top 20 US companies by market cap - Investor Relations feeds
+
+feeds:
+  apple:
+    name: "Apple"
+    ticker: "AAPL"
+    url: "https://www.apple.com/newsroom/rss-feed.rss"
+    company_id: 1
+    provider: "rss"
+    description: "Apple Newsroom RSS Feed"
+
+  microsoft:
+    name: "Microsoft"
+    ticker: "MSFT"
+    url: "https://news.microsoft.com/feed/"
+    company_id: 2
+    provider: "rss"
+    description: "Microsoft News Feed"
+
+  nvidia:
+    name: "NVIDIA"
+    ticker: "NVDA"
+    url: "https://nvidianews.nvidia.com/rss.xml"
+    company_id: 3
+    provider: "rss"
+    description: "NVIDIA News RSS Feed"
+
+  alphabet:
+    name: "Alphabet"
+    ticker: "GOOGL"
+    url: "https://blog.google/rss/"
+    company_id: 4
+    provider: "rss"
+    description: "Google Blog RSS Feed"
+
+  amazon:
+    name: "Amazon"
+    ticker: "AMZN"
+    url: "https://www.aboutamazon.com/news/rss"
+    company_id: 5
+    provider: "rss"
+    description: "About Amazon News RSS Feed"
+
+  meta:
+    name: "Meta"
+    ticker: "META"
+    url: "https://about.fb.com/news/feed/"
+    company_id: 6
+    provider: "rss"
+    description: "Meta News Feed"
+
+  tesla:
+    name: "Tesla"
+    ticker: "TSLA"
+    url: "https://www.tesla.com/news/all/rss"
+    company_id: 7
+    provider: "rss"
+    description: "Tesla News RSS Feed"
+
+  berkshire:
+    name: "Berkshire Hathaway"
+    ticker: "BRK.B"
+    url: "https://www.berkshirehathaway.com/news/rss"
+    company_id: 8
+    provider: "rss"
+    description: "Berkshire Hathaway News Feed"
+
+  broadcom:
+    name: "Broadcom"
+    ticker: "AVGO"
+    url: "https://investors.broadcom.com/news-releases/rss"
+    company_id: 9
+    provider: "rss"
+    description: "Broadcom Investor Relations Feed"
+
+  lilly:
+    name: "Eli Lilly"
+    ticker: "LLY"
+    url: "https://investor.lilly.com/news-releases/rss"
+    company_id: 10
+    provider: "rss"
+    description: "Eli Lilly Investor Relations Feed"
+
+  tsm:
+    name: "Taiwan Semiconductor"
+    ticker: "TSM"
+    url: "https://investor.tsmc.com/english/news/rss"
+    company_id: 11
+    provider: "rss"
+    description: "TSMC News Feed"
+
+  novo:
+    name: "Novo Nordisk"
+    ticker: "NVO"
+    url: "https://investors.novonordisk.com/news-releases/rss"
+    company_id: 12
+    provider: "rss"
+    description: "Novo Nordisk Investor Relations Feed"
+
+  walmart:
+    name: "Walmart"
+    ticker: "WMT"
+    url: "https://corporate.walmart.com/news/rss"
+    company_id: 13
+    provider: "rss"
+    description: "Walmart Corporate News Feed"
+
+  jpmorgan:
+    name: "JPMorgan Chase"
+    ticker: "JPM"
+    url: "https://www.jpmorgan.com/rss/news"
+    company_id: 14
+    provider: "rss"
+    description: "JPMorgan Chase News Feed"
+
+  visa:
+    name: "Visa"
+    ticker: "V"
+    url: "https://investor.visa.com/news-releases/rss"
+    company_id: 15
+    provider: "rss"
+    description: "Visa Investor Relations Feed"
+
+  mastercard:
+    name: "Mastercard"
+    ticker: "MA"
+    url: "https://investor.mastercard.com/news-releases/rss"
+    company_id: 16
+    provider: "rss"
+    description: "Mastercard Investor Relations Feed"
+
+  adobe:
+    name: "Adobe"
+    ticker: "ADBE"
+    url: "https://www.adobe.com/newsroom/rss_feed.xml"
+    company_id: 17
+    provider: "rss"
+    description: "Adobe Newsroom RSS Feed"
+
+  netflix:
+    name: "Netflix"
+    ticker: "NFLX"
+    url: "https://www.netflix.com/tudum/blog/rss"
+    company_id: 18
+    provider: "rss"
+    description: "Netflix Tudum Blog Feed"
+
+  costco:
+    name: "Costco"
+    ticker: "COST"
+    url: "https://www.ccostco.com/costco-newsroom/rss"
+    company_id: 19
+    provider: "rss"
+    description: "Costco Newsroom RSS Feed"
+
+  paypal:
+    name: "PayPal"
+    ticker: "PYPL"
+    url: "https://newsroom.paypal-corp.com/rss"
+    company_id: 20
+    provider: "rss"
+    description: "PayPal Newsroom Feed"
+
+# Feed polling schedule (for Celery Beat)
+schedule:
+  # How often to poll each feed (in hours)
+  poll_interval_hours: 4
+
+  # Maximum entries to fetch per poll
+  max_entries_per_feed: 50
+
+  # How far back to look for new entries (in days)
+  lookback_days: 90

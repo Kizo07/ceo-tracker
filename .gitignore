@@ -1,0 +1,75 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+build/
+develop-eggs/
+sdist/
+wheels/
+.installed.cfg
+pip-wheel-metadata/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# ---- Databases ----
+*.db
+*.sqlite
+*.sqlite3
+ceo_tracker.db
+
+# ---- Environment / secrets ----
+.env
+.env.local
+.env.*.local
+
+# ---- Logs / runtime ----
+logs/
+*.log
+*.pid
+*.seed
+
+# ---- Node / Frontend ----
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+
+# Frontend env (keep .env.example)
+frontend/.env
+
+# ---- Models / caches ----
+.cache/
+models/
+
+# ---- Editors / IDE ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# ---- Docker ----
+# Local postgres data if mounted outside the named volume
+postgres_data/
