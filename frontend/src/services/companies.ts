@@ -3,7 +3,7 @@ import type { Company } from '../types/api';
 
 export const companiesApi = {
   getAll: async (params?: { is_tracked?: boolean }) => {
-    const response = await api.get<{ items: Company[] }>('/api/companies', { params });
+    const response = await api.get<Company[]>('/api/companies', { params });
     return response.data;
   },
 

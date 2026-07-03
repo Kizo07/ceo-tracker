@@ -30,7 +30,7 @@ function CompanyListPage() {
 
       {isLoading ? (
         <div className="text-center py-8 text-muted-foreground">Loading companies...</div>
-      ) : companies.length === 0 ? (
+      ) : !companies || companies.length === 0 ? (
         <div className="text-center py-8 text-muted-foreground">No companies found</div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

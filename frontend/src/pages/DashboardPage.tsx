@@ -3,8 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { dashboardApi } from '../services/dashboard';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/Dialog';
-import { Button } from '../components/ui/Button';
-import { MessageSquare, Building2, Users, TrendingUp, X } from 'lucide-react';
+import { MessageSquare, Building2, Users, TrendingUp } from 'lucide-react';
 import { formatNumber, getSentimentBgColor } from '../utils/formatters';
 import { useNavigate } from 'react-router-dom';
 
