@@ -38,6 +38,13 @@ jobs:
       - name: Ruff
         run: ruff check .
 
+      # Standalone import smoke (unmasked) — surfaces the real traceback if the
+      # app or models fail to import, before pytest's conftest masking kicks in.
+      - name: Import smoke
+        run: |
+          python -c "import app.models; print('models OK')"
+          python -c "from app.main import app; print('main OK')"
+
       - name: Pytest
         run: pytest
 
