@@ -3,7 +3,7 @@ Sentiment analysis service using FinBERT.
 """
 import logging
 from typing import Dict, Optional, List
-from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
+from transformers import pipeline
 import torch
 
 logger = logging.getLogger(__name__)

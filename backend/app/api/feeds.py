@@ -6,11 +6,10 @@ Provides endpoints to trigger, monitor, and configure RSS feed ingestion.
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from typing import Optional, List, Dict
+from typing import Optional, List
 
 from ..db.database import get_db
-from ..services.feeds import get_feed_service, FeedConfig
-from ..services.ingestion import IngestionService
+from ..services.feeds import get_feed_service
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
@@ -229,7 +228,7 @@ def get_feed_statistics(db: Session = Depends(get_db)):
     total_mentions = db.query(CompanyMention).count()
 
     # Unprocessed sources
-    unprocessed = db.query(Source).filter(Source.processed == False).count()
+    unprocessed = db.query(Source).filter(Source.processed.is_(False)).count()
 
     return {
         "sources_by_provider": {

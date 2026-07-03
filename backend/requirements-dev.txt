@@ -1,0 +1,8 @@
+# Development / test dependencies
+# Install with: pip install -r requirements-dev.txt
+-r requirements.txt
+
+# Linting
+ruff==0.15.20
+
+# Note: pytest, pytest-asyncio, and httpx are already declared in requirements.txt.

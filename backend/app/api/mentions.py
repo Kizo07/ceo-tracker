@@ -3,7 +3,6 @@ API endpoints for company mentions.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from typing import List, Optional
 from pydantic import BaseModel
 

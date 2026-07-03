@@ -1,13 +1,11 @@
 """
 FastAPI application for CEO Tracker.
 """
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
-from typing import List
 
-from .db.database import engine, get_db, init_db
-from . import models
+from .db.database import init_db
+from . import models  # noqa: F401  (side-effect: register models on Base.metadata)
 
 
 # Create FastAPI app
