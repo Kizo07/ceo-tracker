@@ -546,13 +546,9 @@ export interface components {
             /** Recent Mentions */
             recent_mentions: number;
             /** Most Mentioned Companies */
-            most_mentioned_companies: {
-                [key: string]: unknown;
-            }[];
+            most_mentioned_companies: Record<string, never>[];
             /** Most Active Ceos */
-            most_active_ceos: {
-                [key: string]: unknown;
-            }[];
+            most_active_ceos: Record<string, never>[];
         };
         /**
          * FeedListResponse
@@ -706,10 +702,6 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
-            /** Input */
-            input?: unknown;
-            /** Context */
-            ctx?: Record<string, never>;
         };
     };
     responses: never;
