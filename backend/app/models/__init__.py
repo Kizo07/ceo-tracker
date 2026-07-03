@@ -24,7 +24,7 @@ class Company(Base):
 
     # Relationships
     ceos = relationship("CEO", back_populates="company")
-    mentions_received = relationship("CompanyMention", foreign_keys="CompanyMention.mentioned_company_id")
+    mentions_received = relationship("CompanyMention", foreign_keys="CompanyMention.mentioned_company_id", back_populates="mentioned_company")
 
 
 class CEO(Base):
