@@ -30,7 +30,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
     # Total counts
     total_mentions = db.query(CompanyMention).count()
     total_ceos = db.query(CEO).count()
-    total_companies = db.query(Company).filter(Company.is_tracked == True).count()
+    total_companies = db.query(Company).filter(Company.is_tracked.is_(True)).count()
 
     # Sentiment breakdown
     sentiment_results = db.query(

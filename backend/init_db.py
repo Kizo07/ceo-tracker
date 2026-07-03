@@ -9,7 +9,6 @@ import os
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy.orm import Session
 from app.db.database import engine, SessionLocal, Base
 from app.models import Company, CEO
 

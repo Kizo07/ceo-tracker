@@ -3,7 +3,6 @@ Celery tasks for CEO Tracker background processing.
 
 Tasks include RSS feed fetching, Finnhub API calls, and data cleanup.
 """
-import logging
 from datetime import datetime, timedelta
 from typing import Dict, List
 
@@ -247,7 +246,7 @@ def cleanup_old_sources(days_to_keep: int = 30) -> Dict:
 
     db = SessionLocal()
     try:
-        from app.models import Source, CompanyMention, Speech
+        from app.models import Source
 
         cutoff_date = datetime.utcnow() - timedelta(days=days_to_keep)
 

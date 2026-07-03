@@ -1,7 +1,7 @@
 """
 API endpoints for data ingestion.
 """
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
@@ -174,7 +174,7 @@ def test_ingestion(db: Session = Depends(get_db)):
 def get_ingestion_status(db: Session = Depends(get_db)):
     """Get ingestion status statistics."""
     total_sources = db.query(Source).count()
-    processed_sources = db.query(Source).filter(Source.processed == True).count()
+    processed_sources = db.query(Source).filter(Source.processed.is_(True)).count()
     pending_sources = total_sources - processed_sources
 
     return {

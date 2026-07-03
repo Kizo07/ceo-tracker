@@ -10,7 +10,7 @@ from typing import Optional, List, Dict
 from datetime import datetime
 from sqlalchemy.orm import Session
 
-from ..models import Company, CEO, Source, Speech, CompanyMention
+from ..models import Company, Source, Speech, CompanyMention
 from .ner import get_ner_service, KNOWN_COMPANIES
 from .sentiment import get_sentiment_service
 
@@ -312,7 +312,7 @@ class IngestionService:
     def get_ingestion_stats(self) -> Dict:
         """Get ingestion statistics."""
         total_sources = self.db.query(Source).count()
-        processed_sources = self.db.query(Source).filter(Source.processed == True).count()
+        processed_sources = self.db.query(Source).filter(Source.processed.is_(True)).count()
         total_mentions = self.db.query(CompanyMention).count()
 
         return {
