@@ -117,7 +117,11 @@ endpoints:
   contract:GET_/api/ingest/status:
     source: backend/app/api/ingest.py:173
     response_model: none
-    response: { total_sources, processed_sources, pending_sources, processing_rate }
+    response:
+      total_sources: int
+      processed_sources: int
+      pending_sources: int
+      processing_rate: string   # e.g. "85.7%" (formatted at ingest.py:184)
 
   # --- Feeds ------------------------------------------------------------------
   contract:GET_/api/feeds/config:
@@ -149,7 +153,14 @@ endpoints:
   contract:GET_/api/feeds/stats:
     source: backend/app/api/feeds.py:214
     response_model: none
-    response: { sources_by_provider, total_mentions, unprocessed_sources }
+    response:
+      sources_by_provider:
+        rss: int
+        finnhub: int
+        manual: int
+        total: int
+      total_mentions: int
+      unprocessed_sources: int
 
 # -----------------------------------------------------------------------------
 # Serialization policy (CONTRACT-006)
