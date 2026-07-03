@@ -1,0 +1,78 @@
+# =============================================================================
+# CEO Tracker — Architecture & Domain Ontology (root)
+# =============================================================================
+# This is the root of the spec-driven ontology. It defines the versioning,
+# namespaces, taxonomies (severity / effort), and the cross-file ID scheme
+# used by the other specs under specs/.
+#
+# Scope note: These specs are DESCRIPTIVE (critique + target state). They do
+# not, in this branch, refactor application code. Each finding in issues.yaml
+# references ontology nodes by stable ID so it is traceable.
+# =============================================================================
+
+schema_version: "1.0.0"
+project: ceo-tracker
+generated: "2026-07-02"
+description: >
+  Self-hosted web app tracking CEO speeches/press releases from top US firms,
+  extracting company mentions (NER) and scoring sentiment (FinBERT).
+
+# -----------------------------------------------------------------------------
+# Namespaces / sub-spec files
+# -----------------------------------------------------------------------------
+namespaces:
+  domain:        domain.yaml         # entities, attributes, relationships, constraints
+  services:      services.yaml       # components, responsibilities, dependencies, datastores
+  contract:      api_contract.yaml   # REST endpoints (source of truth for FE/BE contract)
+  data_sources:  data_sources.yaml   # RSS feeds, Finnhub provider, polling, dedup
+  nlp:           nlp_pipeline.yaml   # NER + sentiment models, thresholds, limits
+  config:        config_schema.yaml  # externalized config keys (replaces hardcoded values)
+  issues:        issues.yaml         # findings catalog (critique + remediation)
+
+# -----------------------------------------------------------------------------
+# Node ID conventions — referenced by issues.yaml via `affects:`
+# -----------------------------------------------------------------------------
+#   entity:<Name>           e.g. entity:CompanyMention      (domain.yaml)
+#   service:<id>            e.g. service:mentions_api       (services.yaml)
+#   contract:<METHOD_path>  e.g. contract:GET_/api/timeline (api_contract.yaml)
+#   source:<id>             e.g. source:rss:apple           (data_sources.yaml)
+#   nlp:<id>                e.g. nlp:ner                    (nlp_pipeline.yaml)
+#   config:<key>            e.g. config:api.cors_origins    (config_schema.yaml)
+id_conventions:
+  entity:    "entity:<EntityName>"
+  service:   "service:<component_id>"
+  contract:  "contract:<METHOD>_<path>"
+  source:    "source:<provider>:<key>"
+  nlp:       "nlp:<pipeline_stage>"
+  config:    "config:<dotted.key>"
+
+# -----------------------------------------------------------------------------
+# Issue taxonomy
+# -----------------------------------------------------------------------------
+issue_categories:
+  BUG:      "Correctness defect — code crashes or produces wrong results."
+  ARCH:     "Structural/architectural weakness (coupling, DRY, layering, schema design)."
+  SCALE:    "Obstacle to horizontal/vertical scaling or throughput under load."
+  CONTRACT: "Mismatch or drift between frontend expectations and backend behavior."
+  DEPS:     "Dependency hygiene (duplicates, unused, unpinned, bloat, deprecated libs)."
+  CONFIG:   "Hardcoded value that should be externalized into config/env."
+
+severity:
+  critical: "Broken or unsafe; data loss, crash, or security exposure. Fix immediately."
+  high:     "Real correctness or performance risk; degrades core flows under normal use."
+  medium:   "Technical debt / friction; works today but blocks scaling or maintenance."
+  low:      "Hygiene; cosmetic or minor inefficiency. Fix opportunistically."
+
+effort:
+  S: "Small — under ~1 hour, localized change."
+  M: "Medium — a few hours; may touch multiple files or require testing."
+  L: "Large — a day or more; architectural or cross-cutting change."
+
+# -----------------------------------------------------------------------------
+# Health snapshot (counts derived from issues.yaml)
+# -----------------------------------------------------------------------------
+# These are informational; authoritative counts live in issues.yaml.
+issue_counts:
+  total: 44
+  by_severity: { critical: 3, high: 10, medium: 15, low: 16 }
+  by_category: { BUG: 4, ARCH: 7, SCALE: 8, CONTRACT: 8, DEPS: 7, CONFIG: 10 }

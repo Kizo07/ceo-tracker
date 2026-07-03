@@ -1,0 +1,607 @@
+# =============================================================================
+# Issues Catalog — the architecture critique, encoded
+# =============================================================================
+# Each finding has: id, category, severity, title, evidence (file:line),
+# affects (ontology node refs), impact, remediation, effort.
+# Sorted within category by severity (critical -> low).
+# Reference taxonomies in ontology.yaml.
+# =============================================================================
+
+issues:
+
+  # ===========================================================================
+  # BUG — correctness defects
+  # ===========================================================================
+  - id: BUG-001
+    category: BUG
+    severity: critical
+    effort: S
+    title: "Timeline crashes on RSS-sourced mentions (NULL speech_id)"
+    evidence:
+      - "backend/app/api/dashboard.py:107  # speech = ... .first()  (may be None)"
+      - "backend/app/api/dashboard.py:108  # ceo = ... speech.ceo_id  -> AttributeError"
+      - "backend/app/services/ingestion.py:192  # RSS mentions set speech_id = None"
+    affects: [contract:GET_/api/timeline, entity:CompanyMention, service:dashboard_api]
+    impact: >
+      The moment any RSS press release is ingested, /api/timeline throws a 500
+      on every request that touches one of those mentions. Timeline page is
+      unusable for the primary (automated) data source.
+    remediation: >
+      Guard for speech is None (fall back to company name as speaker, mirroring
+      mentions.py:99-103). Add the proposed Source FK (ARCH-003) so provenance
+      is preserved. Add a regression test with a NULL-speech mention.
+
+  - id: BUG-002
+    category: BUG
+    severity: critical
+    effort: S
+    title: "Timeline field-name mismatch: backend 'ceo' vs frontend 'ceo_name'"
+    evidence:
+      - "backend/app/api/dashboard.py:113  # returns key 'ceo'"
+      - "frontend/src/pages/TimelinePage.tsx:74  # reads item.ceo_name"
+      - "frontend/src/types/api.ts:135  # TimelineItem.ceo_name"
+    affects: [contract:GET_/api/timeline]
+    impact: "Timeline renders a blank speaker name for every row."
+    remediation: >
+      Standardize the field name (ceo_name) in api_contract.yaml; return it from
+      the backend; generate FE types from OpenAPI to prevent recurrence.
+
+  - id: BUG-003
+    category: BUG
+    severity: medium
+    effort: S
+    title: "fetch_all_feeds runs sub-tasks synchronously, not in parallel"
+    evidence:
+      - "backend/workers/tasks.py:137  # fetch_rss_feed(feed_key) called directly, not .delay()"
+      - "backend/workers/beat_config.py  # 'fetch-all' is NOT in the beat schedule"
+    affects: [service:celery_worker, service:celery_beat, source:rss]
+    impact: >
+      The 'refresh all' fan-out executes 20 feeds sequentially inside one worker
+      task (no parallelism), and Celery Beat never schedules it automatically.
+    remediation: >
+      Use a Celery group/chord to dispatch per-feed tasks in parallel; add a
+      beat entry for periodic full refresh if desired.
+
+  - id: BUG-004
+    category: BUG
+    severity: low
+    effort: S
+    title: "Cleanup never deletes sources with NULL published_at"
+    evidence:
+      - "backend/workers/tasks.py:255  # filter Source.published_at < cutoff"
+      - "backend/app/services/feeds.py:206  # _extract_published_date may return None"
+    affects: [entity:Source, service:celery_worker]
+    impact: >
+      RSS entries without a parseable date are never reaped, so Source.raw_text
+      grows without bound over time.
+    remediation: >
+      Also delete by created_at/fetched_at fallback, and/or backfill published_at
+      at parse time.
+
+  # ===========================================================================
+  # CONTRACT — frontend/backend mismatches
+  # ===========================================================================
+  - id: CONTRACT-001
+    category: CONTRACT
+    severity: critical
+    effort: S
+    title: "Companies list shape mismatch: bare array vs { items: [] }"
+    evidence:
+      - "backend/app/api/companies.py:28  # response_model: List[CompanyResponse] (bare array)"
+      - "frontend/src/services/companies.ts:6  # typed as { items: Company[] }"
+    affects: [contract:GET_/api/companies, service:companies_api]
+    impact: >
+      Any FE consumer calling companiesApi.getAll().items (or .map on the
+      object) breaks at runtime; the type system hides it.
+    remediation: "Pick one shape (recommend bare array) and align the FE type; encode in api_contract.yaml."
+
+  - id: CONTRACT-002
+    category: CONTRACT
+    severity: high
+    effort: S
+    title: "/feeds/refresh response model drops task_id"
+    evidence:
+      - "backend/app/api/feeds.py:51  # RefreshFeedsResponse has no task_id field"
+      - "backend/app/api/feeds.py:174  # handler returns task_id=task.id (silently dropped by Pydantic)"
+      - "frontend/src/services/feeds.ts:21  # typed as TaskResponse (expects task_id)"
+    affects: [contract:POST_/api/feeds/refresh]
+    impact: "FE cannot track the refresh task; data.task_id is undefined."
+    remediation: "Add task_id (Optional) to RefreshFeedsResponse; align with TaskResponse."
+
+  - id: CONTRACT-003
+    category: CONTRACT
+    severity: high
+    effort: M
+    title: "Task-status contract assumed by FE but no backend endpoint exists"
+    evidence:
+      - "frontend/src/types/api.ts:116  # TaskResponse.status enum (PENDING/STARTED/...)"
+      - "frontend/src/pages/FeedsPage.tsx:28  # stubbed setTimeout poll, not real status"
+      - "backend/app/api/  # no /tasks/{id} or Celery result inspection endpoint"
+    affects: [contract:POST_/api/feeds/trigger, contract:POST_/api/feeds/refresh, service:feeds_api]
+    impact: >
+      The UI pretends to track async tasks but never reflects real Celery state;
+      users get no failure/progress signal.
+    remediation: >
+      Add GET /api/tasks/{id} backed by AsyncResult(result_backend); or drop the
+      task-tracking UI and return synchronous results for small jobs.
+
+  - id: CONTRACT-004
+    category: CONTRACT
+    severity: medium
+    effort: S
+    title: "Type nullability lies: ceo_id and speech_id typed as required numbers"
+    evidence:
+      - "frontend/src/types/api.ts:28  # Mention.ceo_id: number  (backend returns null for RSS)"
+      - "frontend/src/types/api.ts:113  # IngestResponse.speech_id: number  (backend Optional)"
+      - "backend/app/api/mentions.py:101  # ceo_id = None for RSS"
+      - "backend/app/api/ingest.py:31  # speech_id: Optional[int]"
+    affects: [contract:GET_/api/mentions, contract:POST_/api/ingest]
+    impact: "Runtime null-dereference risk; incorrect FE branching."
+    remediation: "Make these nullable in TS (number | null); generate from OpenAPI."
+
+  - id: CONTRACT-005
+    category: CONTRACT
+    severity: low
+    effort: S
+    title: "Phantom created_at/updated_at fields on FE Company/CEO types"
+    evidence:
+      - "frontend/src/types/api.ts:10  # Company.created_at/updated_at"
+      - "frontend/src/types/api.ts:22  # CEO.created_at/updated_at"
+      - "backend/app/api/companies.py:15  # CompanyResponse omits them"
+      - "backend/app/api/ceos.py:15  # CEOResponse omits them"
+    affects: [contract:GET_/api/companies, contract:GET_/api/ceos]
+    impact: "FE fields are always undefined; misleading types."
+    remediation: "Remove from FE types or add to response models; generate from OpenAPI."
+
+  - id: CONTRACT-006
+    category: CONTRACT
+    severity: medium
+    effort: M
+    title: "Inconsistent serialization: response_model vs raw dicts"
+    evidence:
+      - "backend/app/api/dashboard.py:94  # /timeline returns raw list"
+      - "backend/app/api/mentions.py:208  # /sentiment/summary returns raw dict"
+      - "backend/app/api/feeds.py:85  # /feeds/status raw dict"
+      - "backend/app/api/feeds.py:214  # /feeds/stats raw dict"
+    affects: [contract:GET_/api/timeline, contract:GET_/api/feeds/status, contract:GET_/api/feeds/stats, "contract:GET_/api/sentiment/summary/{ceo_id}"]
+    impact: "Unvalidated shapes drift from FE types (root cause of BUG-002/CONTRACT-001)."
+    remediation: "Define Pydantic response models for every endpoint; encode in api_contract.yaml."
+
+  - id: CONTRACT-007
+    category: CONTRACT
+    severity: high
+    effort: M
+    title: "Docker VITE_API_URL=http://backend:8000 is unresolvable by the browser"
+    evidence:
+      - "docker-compose.yml:94  # VITE_API_URL=http://backend:8000"
+      - "frontend/src/services/api.ts:4  # axios baseURL = VITE_API_URL"
+      - "frontend/nginx.conf:11  # /api proxied to backend:8000 (server-side only)"
+    affects: [config:api.frontend_url_docker]
+    impact: >
+      In Docker, the browser would call a container hostname it can't resolve.
+      Only works today because nginx proxies same-origin /api; the env var is
+      misleading and any direct API call fails.
+    remediation: >
+      Omit VITE_API_URL in Docker (use relative '/api' via nginx proxy); keep it
+      only for local dev with the vite proxy.
+
+  - id: CONTRACT-008
+    category: CONTRACT
+    severity: medium
+    effort: L
+    title: "No OpenAPI -> TypeScript codegen; hand-maintained types drift"
+    evidence:
+      - "frontend/src/types/api.ts  # all types hand-written"
+      - "backend/app/main.py  # FastAPI emits /openapi.json but it is unused"
+    affects: [contract:*]
+    impact: "Structural enabler of every CONTRACT-* issue above."
+    remediation: >
+      Generate FE types from /openapi.json (e.g. openapi-typescript) in the
+      build; treat api_contract.yaml as the human-readable source of truth.
+
+  # ===========================================================================
+  # ARCH — architectural weaknesses
+  # ===========================================================================
+  - id: ARCH-001
+    category: ARCH
+    severity: high
+    effort: M
+    title: "N+1 queries in mentions list and timeline"
+    evidence:
+      - "backend/app/api/mentions.py:79-117  # 3-4 queries per mention (company, speech, ceo, ceo_company)"
+      - "backend/app/api/dashboard.py:106-109  # timeline same pattern"
+    affects: [service:mentions_api, service:dashboard_api, entity:CompanyMention]
+    impact: "~300-400 DB round-trips for a 100-mention page; latency scales with page size."
+    remediation: "Eager-load with selectinload/joinedload; compute aggregates in SQL."
+
+  - id: ARCH-002
+    category: ARCH
+    severity: medium
+    effort: S
+    title: "Duplicated ingestion pipeline (DRY violation)"
+    evidence:
+      - "backend/app/api/ingest.py:50-119  # re-implements NER->sentiment->mention inline"
+      - "backend/app/services/ingestion.py:38  # IngestionService.process_text already does this"
+    affects: [service:ingest_api, service:ingestion_svc]
+    impact: "Two code paths diverge over time (bug-fix in one won't reach the other)."
+    remediation: "Route POST /api/ingest through IngestionService.process_text."
+
+  - id: ARCH-003
+    category: ARCH
+    severity: high
+    effort: M
+    title: "CompanyMention has no FK to Source -> lost provenance for RSS mentions"
+    evidence:
+      - "backend/app/models/__init__.py:90  # speech_id nullable; no source_id"
+      - "backend/app/services/ingestion.py:192  # RSS mentions: speech_id = None"
+    affects: [entity:CompanyMention, entity:Source]
+    impact: "Press-release mentions cannot link back to their source URL/title."
+    remediation: "Add nullable source_id FK on CompanyMention (see domain.yaml target_state)."
+
+  - id: ARCH-004
+    category: ARCH
+    severity: low
+    effort: S
+    title: "is_tracked semantics inconsistent"
+    evidence:
+      - "backend/init_db.py:188  # marks ALL 20 companies is_tracked=True"
+      - "README.md  # implies only top-5 are 'tracked'"
+      - "backend/app/api/dashboard.py:33  # counts is_tracked companies"
+    affects: [entity:Company]
+    impact: "Dashboard 'Companies' count and tracking semantics are ambiguous."
+    remediation: "Define is_tracked precisely in domain.yaml; seed only intended companies as tracked."
+
+  - id: ARCH-005
+    category: ARCH
+    severity: low
+    effort: S
+    title: "Duplicate logger definition"
+    evidence:
+      - "backend/app/services/feeds.py:16  # logger = logging.getLogger(__name__)"
+      - "backend/app/services/feeds.py:18  # same line repeated"
+    affects: [service:feed_svc]
+    impact: "No functional impact; minor hygiene."
+    remediation: "Remove the duplicate line."
+
+  - id: ARCH-006
+    category: ARCH
+    severity: medium
+    effort: S
+    title: "Deprecated library APIs in use"
+    evidence:
+      - "backend/app/db/database.py:42  # sqlalchemy.ext.declarative.declarative_base (deprecated in 2.0)"
+      - "backend/app/main.py:30  # @app.on_event('startup') (deprecated)"
+      - "backend/app/db/database.py:16  # Pydantic v1 'class Config' under pydantic-settings v2"
+    affects: [service:db]
+    impact: "Deprecation warnings; will break on future major versions."
+    remediation: "Use sqlalchemy.orm.declarative_base/DeclarativeBase, FastAPI lifespan, model_config=SettingsConfigDict."
+
+  - id: ARCH-007
+    category: ARCH
+    severity: medium
+    effort: M
+    title: "No API versioning; alembic present but no migrations"
+    evidence:
+      - "backend/app/main.py:69  # all routers under /api (no /v1)"
+      - "backend/app/main.py:33  # init_db() runs create_all on every boot"
+      - "backend/requirements.txt:12  # alembic declared, no migrations dir"
+    affects: [service:db, contract:*]
+    impact: "Contract changes are breaking by default; schema changes aren't version-controlled/migratable."
+    remediation: "Introduce /api/v1 prefix; adopt Alembic migrations; stop create_all-at-boot in prod."
+
+  # ===========================================================================
+  # SCALE — scaling hurdles
+  # ===========================================================================
+  - id: SCALE-001
+    category: SCALE
+    severity: high
+    effort: L
+    title: "ML models loaded per process (~1GB each)"
+    evidence:
+      - "backend/app/services/ner.py:183  # singleton in module global"
+      - "backend/app/services/sentiment.py:220  # singleton in module global"
+    affects: [service:ner_svc, service:sentiment_svc, nlp:ner, nlp:sentiment]
+    impact: "Web + each Celery worker each load spaCy+FinBERT+torch; RAM scales linearly with process count."
+    remediation: >
+      Centralize inference (dedicated model-serving process / Triton / a small
+      inference microservice), or share via on-disk model + single worker pool.
+
+  - id: SCALE-002
+    category: SCALE
+    severity: high
+    effort: M
+    title: "Synchronous ML inference in the request path"
+    evidence:
+      - "backend/app/api/ingest.py:81-114  # NER + FinBERT run inline in POST /api/ingest"
+    affects: [contract:POST_/api/ingest, service:ingest_api, nlp:sentiment]
+    impact: "Request latency = model latency; ties up HTTP workers; poor UX and throughput."
+    remediation: "Enqueue ingestion to Celery; return a job id; poll for results (pairs with CONTRACT-003)."
+
+  - id: SCALE-003
+    category: SCALE
+    severity: medium
+    effort: M
+    title: "No caching layer; dashboard aggregates recomputed each load"
+    evidence:
+      - "backend/app/api/dashboard.py:27  # full aggregation per request"
+      - "service:celery_broker  # Redis present but unused as app cache"
+    affects: [service:dashboard_api]
+    impact: "Heavy GROUP BY queries run on every dashboard open."
+    remediation: "Cache dashboard stats in Redis with a short TTL; invalidate on ingest."
+
+  - id: SCALE-004
+    category: SCALE
+    severity: medium
+    effort: M
+    title: "Missing index on created_at; indexed fields unused by queries"
+    evidence:
+      - "backend/app/models/__init__.py:93  # CompanyMention.sentiment indexed, created_at NOT"
+      - "backend/app/api/dashboard.py:100  # ORDER BY created_at"
+      - "backend/app/models/__init__.py:76  # Speech.mentioned_at indexed but unused"
+    affects: [entity:CompanyMention, entity:Speech, contract:GET_/api/timeline]
+    impact: "Timeline ordering/filters scan without a supporting index."
+    remediation: "Add index on CompanyMention.created_at; drop/repurpose unused indexes."
+
+  - id: SCALE-005
+    category: SCALE
+    severity: medium
+    effort: M
+    title: "Feed polling inefficiency"
+    evidence:
+      - "backend/app/services/feeds.py:125  # requests.get, no ETag/If-Modified-Since"
+      - "backend/app/services/feeds.py:138-139  # re-applies lookback window each poll"
+      - "backend/app/services/feeds.py:266  # O(n) URL dedup per entry"
+    affects: [source:rss, service:feed_svc]
+    impact: "Wasted bandwidth/CPU; repeated re-evaluation of old entries."
+    remediation: "Use conditional GETs; track last-seen per feed; index Source.url for dedup."
+
+  - id: SCALE-006
+    category: SCALE
+    severity: medium
+    effort: M
+    title: "Celery tuning: prefetch=1, no retry/backoff, beat incomplete"
+    evidence:
+      - "backend/workers/celery_app.py:55  # worker_prefetch_multiplier=1"
+      - "backend/workers/celery_app.py  # no autoretry_for / retry_backoff on tasks"
+      - "backend/workers/beat_config.py  # schedules only 5 of 20 feeds"
+    affects: [service:celery_worker, service:celery_beat]
+    impact: "Throughput limited; transient feed errors fail permanently; coverage gaps."
+    remediation: "Add retry/backoff to feed tasks; right-size prefetch/concurrency; complete beat schedule."
+
+  - id: SCALE-007
+    category: SCALE
+    severity: low
+    effort: M
+    title: "No observability (metrics / structured logging / tracing)"
+    evidence:
+      - "backend/  # no metrics, no structured logging, no tracing"
+    affects: [service:*]
+    impact: "Cannot locate performance ceilings or failures in production."
+    remediation: "Add structured logging + Prometheus metrics + request/task tracing."
+
+  - id: SCALE-008
+    category: SCALE
+    severity: low
+    effort: S
+    title: "SQLite dev backend locks under concurrency"
+    evidence:
+      - "backend/app/db/database.py:26  # sqlite -> check_same_thread=False"
+      - "backend/.env  # DATABASE_URL=sqlite:///./ceo_tracker.db"
+    affects: [service:db]
+    impact: "Dev/prod divergence; SQLite serializes writes and locks under load."
+    remediation: "Default dev to Postgres (docker-compose) to match prod; keep SQLite only for quick tests."
+
+  # ===========================================================================
+  # DEPS — dependency hygiene
+  # ===========================================================================
+  - id: DEPS-001
+    category: DEPS
+    severity: low
+    effort: S
+    title: "httpx listed twice in requirements"
+    evidence:
+      - "backend/requirements.txt:22  # httpx==0.25.2"
+      - "backend/requirements.txt:39  # httpx==0.25.2 (duplicate)"
+    affects: []
+    impact: "Duplicate entry; confusing, no functional effect."
+    remediation: "Remove the duplicate; adopt a lockfile (pip-tools/uv)."
+
+  - id: DEPS-002
+    category: DEPS
+    severity: low
+    effort: S
+    title: "beautifulsoup4 declared but unused"
+    evidence:
+      - "backend/requirements.txt:24  # beautifulsoup4==4.12.2"
+      - "backend/app/services/feeds.py:249  # HTML stripped with regex instead"
+    affects: [service:feed_svc]
+    impact: "Dead dependency; regex HTML stripping is fragile (also relevant to SCALE-005 correctness)."
+    remediation: "Use BeautifulSoup for stripping (better) or drop the dependency."
+
+  - id: DEPS-003
+    category: DEPS
+    severity: medium
+    effort: M
+    title: "alembic declared but no migrations exist"
+    evidence:
+      - "backend/requirements.txt:12  # alembic==1.13.0"
+      - "backend/  # no migrations/ or alembic.ini"
+    affects: [service:db]
+    impact: "False sense of migration tooling; schema drift risk."
+    remediation: "Initialize Alembic and author a baseline migration (pairs with ARCH-007)."
+
+  - id: DEPS-004
+    category: DEPS
+    severity: low
+    effort: S
+    title: "Two HTTP clients (requests + httpx)"
+    evidence:
+      - "backend/app/services/feeds.py:5  # uses requests"
+      - "backend/app/services/finnhub.py:10  # uses httpx"
+    affects: [service:feed_svc, service:finnhub_svc]
+    impact: "Inconsistent HTTP handling; redundant deps."
+    remediation: "Standardize on one client (httpx) across services."
+
+  - id: DEPS-005
+    category: DEPS
+    severity: medium
+    effort: M
+    title: "torch ~800MB image; no CPU wheel index"
+    evidence:
+      - "backend/requirements.txt:17  # torch==2.1.1"
+      - "backend/Dockerfile:15  # pip install -r requirements.txt (pulls CUDA libs by default)"
+    affects: [nlp:sentiment, service:sentiment_svc]
+    impact: "Large images/slow builds; CUDA libs unused on CPU-only hosts."
+    remediation: "Pin CPU wheels via --index-url, or use ONNX/optimum, or externalize sentiment."
+
+  - id: DEPS-006
+    category: DEPS
+    severity: low
+    effort: S
+    title: "Unpinned ML models; no lockfile"
+    evidence:
+      - "backend/Dockerfile:18  # spacy download en_core_web_sm (no version pin)"
+      - "backend/app/services/sentiment.py:29  # ProsusAI/finbert (unpinned)"
+      - "backend/requirements.txt  # no lockfile"
+    affects: [nlp:ner, nlp:sentiment]
+    impact: "Non-reproducible builds; model changes can silently alter results."
+    remediation: "Pin model versions; generate a locked requirements file."
+
+  - id: DEPS-007
+    category: DEPS
+    severity: low
+    effort: S
+    title: "No Node pin/engines; no audit/CI"
+    evidence:
+      - "frontend/package.json  # no 'engines' field"
+      - "repo  # no CI workflow, no npm/pip audit"
+    affects: []
+    impact: "Dev Node version unpinned; no vulnerability scanning."
+    remediation: "Add engines.node pin + CI with audit steps."
+
+  # ===========================================================================
+  # CONFIG — hardcoded values to externalize
+  # ===========================================================================
+  - id: CONFIG-001
+    category: CONFIG
+    severity: high
+    effort: M
+    title: "KNOWN_COMPANIES dict duplicates the database"
+    evidence:
+      - "backend/app/services/ner.py:145-179  # hardcoded name->ticker map"
+    affects: [service:ner_svc, nlp:ner, config:nlp.known_companies]
+    impact: "Company list maintained in code AND DB AND feeds.yaml; drifts; new companies need a release."
+    remediation: "Load known companies from the DB (or a single seed spec) at service init."
+
+  - id: CONFIG-002
+    category: CONFIG
+    severity: medium
+    effort: M
+    title: "init_db seed data duplicates feeds.yaml"
+    evidence:
+      - "backend/init_db.py:31-172  # companies + CEOs hardcoded"
+      - "backend/config/feeds.yaml:4  # same companies for feeds"
+    affects: [config:seed_data, entity:Company, entity:CEO]
+    impact: "Two sources of truth for the company roster."
+    remediation: "Single seed spec (seed/companies.yaml) consumed by init_db and feeds."
+
+  - id: CONFIG-003
+    category: CONFIG
+    severity: high
+    effort: M
+    title: "feeds.yaml company_id 1..20 assumes sequential DB ids"
+    evidence:
+      - "backend/config/feeds.yaml:9  # company_id: 1 (etc.)"
+    affects: [source:rss, config:seed_data]
+    impact: "If seed order changes or ids have gaps, feeds link to the wrong company."
+    remediation: "Reference companies by ticker (unique) and resolve to id at runtime."
+
+  - id: CONFIG-004
+    category: CONFIG
+    severity: medium
+    effort: S
+    title: "beat_config duplicates feed URLs (and schedules only 5 of 20)"
+    evidence:
+      - "backend/workers/beat_config.py:9-15  # FEEDS_CONFIG duplicates feeds.yaml"
+      - "backend/workers/beat_config.py:18-44  # schedules only apple/microsoft/nvidia/alphabet/amazon"
+    affects: [service:celery_beat, source:rss]
+    impact: "Three sources of truth for feeds; 15 feeds never polled automatically."
+    remediation: "Generate beat schedule from feeds.yaml; single source of truth."
+
+  - id: CONFIG-005
+    category: CONFIG
+    severity: high
+    effort: S
+    title: "Credentials hardcoded in code/compose"
+    evidence:
+      - "backend/app/db/database.py:13  # default conn string with 'password'"
+      - "docker-compose.yml:9  # POSTGRES_PASSWORD: password"
+    affects: [config:db.postgres_password, config:db.url]
+    impact: "Secrets (even dev defaults) committed to a public repo."
+    remediation: "Reference ${POSTGRES_PASSWORD} everywhere; never inline defaults in compose/code."
+
+  - id: CONFIG-006
+    category: CONFIG
+    severity: low
+    effort: S
+    title: "CORS origins hardcoded"
+    evidence:
+      - "backend/app/main.py:22-24  # allow_origins=[localhost:3000,5173]"
+    affects: [config:api.cors_origins]
+    impact: "Can't change allowed origins without a code change."
+    remediation: "Read CORS_ORIGINS from env (list)."
+
+  - id: CONFIG-007
+    category: CONFIG
+    severity: low
+    effort: S
+    title: "Hardcoded absolute config path"
+    evidence:
+      - "backend/app/services/feeds.py:71  # '/home/fire/ceo-tracker/backend/config/feeds.yaml'"
+    affects: [config:sources.rss.config_path, service:feed_svc]
+    impact: "Breaks on any other machine / deploy path."
+    remediation: "Resolve path relative to the module or via FEEDS_CONFIG_PATH env."
+
+  - id: CONFIG-008
+    category: CONFIG
+    severity: low
+    effort: S
+    title: "Magic numbers in NLP pipeline"
+    evidence:
+      - "backend/app/services/ner.py:71  # context_window=3"
+      - "backend/app/services/sentiment.py:88  # max_length=500"
+      - "backend/app/services/finnhub.py:26  # RATE_LIMIT_DELAY=1.0"
+      - "backend/app/services/feeds.py  # lookback default 7 vs yaml 90"
+    affects: [config:nlp.ner.context_window, config:nlp.sentiment.max_input_chars, config:api.finnhub.rate_limit_seconds]
+    impact: "Behavior-altering constants buried in code; lookback drift between code and yaml."
+    remediation: "Move to config_schema keys with env overrides."
+
+  - id: CONFIG-009
+    category: CONFIG
+    severity: low
+    effort: S
+    title: "Hardcoded ports and absolute paths in scripts/compose"
+    evidence:
+      - "start.sh:40-41  # absolute backend/frontend dirs"
+      - "docker-compose.yml / nginx.conf / vite.config.ts  # ports 8000/3000"
+    affects: [config:paths.backend_dir, config:paths.frontend_dir, config:ports.backend, config:ports.frontend]
+    impact: "Not portable across machines/environments."
+    remediation: "Derive paths from script location; read ports from env."
+
+  - id: CONFIG-010
+    category: CONFIG
+    severity: low
+    effort: S
+    title: "Frontend hardcoded sentiment color maps + polling intervals"
+    evidence:
+      - "frontend/src/utils/formatters.ts:28  # duplicate text/bg color maps"
+      - "frontend/src/utils/constants.ts:17  # polling intervals hardcoded"
+      - "backend/app/api/ingest.py:154  # sample text in /ingest/test"
+    affects: [config:frontend.sentiment_colors, config:frontend.polling.task_status_ms]
+    impact: "Styling/intervals not configurable; sample text in API code."
+    remediation: "Centralize theme tokens; read intervals from a constants module; move sample text out."
+
+# -----------------------------------------------------------------------------
+# Quick-win batch (low-effort, high signal) — recommended first
+# -----------------------------------------------------------------------------
+quick_wins: [BUG-001, BUG-002, CONTRACT-001, CONTRACT-002, ARCH-005, DEPS-001, CONFIG-005, CONFIG-006, CONFIG-007]

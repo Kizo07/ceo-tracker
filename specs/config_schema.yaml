@@ -1,0 +1,134 @@
+# =============================================================================
+# Config Schema Ontology — externalized values (target state)
+# =============================================================================
+# Every value that is hardcoded in code today and SHOULD be driven by
+# environment/config. Each entry records where it currently lives and the
+# recommended external key. Node id: config:<dotted.key>.
+#
+# Convention: env vars OVERRIDE defaults; defaults match current behavior so
+# behavior is preserved when no env is set.
+# =============================================================================
+
+config:
+
+  # --- Database / infrastructure ---------------------------------------------
+  config:db.url:
+    current: backend/app/db/database.py:13  # "postgresql://ceo_tracker:password@localhost:5432/ceo_tracker"
+    env: DATABASE_URL
+    default: "postgresql://ceo_tracker:password@localhost:5432/ceo_tracker"
+    issues: [CONFIG-005]
+  config:db.redis_url:
+    env: REDIS_URL
+    default: "redis://localhost:6379/0"
+  config:db.postgres_password:
+    current: docker-compose.yml:9   # POSTGRES_PASSWORD: password (hardcoded)
+    env: POSTGRES_PASSWORD
+    default: password
+    issues: [CONFIG-005]
+
+  # --- API --------------------------------------------------------------------
+  config:api.cors_origins:
+    current: backend/app/main.py:22   # ["http://localhost:3000","http://localhost:5173"]
+    env: CORS_ORIGINS
+    default: ["http://localhost:3000", "http://localhost:5173"]
+    issues: [CONFIG-006]
+  config:api.version_prefix:
+    current: none                     # ARCH-007
+    default: "/api/v1"
+  config:api.frontend_url_docker:
+    current: docker-compose.yml:94    # VITE_API_URL=http://backend:8000 (broken in browser)
+    recommended: null                 # omit -> use same-origin '/api' via nginx proxy
+    issues: [CONTRACT-007]
+
+  # --- NLP --------------------------------------------------------------------
+  config:nlp.spacy_model:
+    current: backend/app/services/ner.py:17
+    env: SPACY_MODEL
+    default: en_core_web_sm
+    issues: [DEPS-006]
+  config:nlp.finbert_model:
+    current: backend/app/services/sentiment.py:29
+    env: FINBERT_MODEL
+    default: ProsusAI/finbert
+    issues: [DEPS-006]
+  config:nlp.ner.context_window:
+    current: backend/app/services/ner.py:71
+    default: 3
+    issues: [CONFIG-008]
+  config:nlp.sentiment.max_input_chars:
+    current: backend/app/services/sentiment.py:88
+    default: 500
+    issues: [CONFIG-008]
+  config:nlp.known_companies:
+    current: backend/app/services/ner.py:145   # KNOWN_COMPANIES dict duplicates DB
+    recommended: "derive from entity:Company (DB) at runtime"
+    issues: [CONFIG-001]
+
+  # --- Data sources -----------------------------------------------------------
+  config:sources.rss.config_path:
+    current: backend/app/services/feeds.py:71   # hardcoded /home/fire/... absolute path
+    env: FEEDS_CONFIG_PATH
+    default: "config/feeds.yaml"
+    issues: [CONFIG-007]
+  config:sources.rss.lookback_days:
+    current: 90   # feeds.yaml schedule.lookback_days (code fallback is 7 -> drift)
+    env: RSS_LOOKBACK_DAYS
+    default: 90
+  config:sources.rss.max_entries_per_feed:
+    current: 50
+    default: 50
+  config:sources.rss.poll_interval_hours:
+    current: 4
+    default: 4
+  config:sources.rss.timeout_seconds:
+    current: backend/app/services/feeds.py:125   # requests timeout=10
+    default: 10
+  config:api.finnhub.rate_limit_seconds:
+    current: backend/app/services/finnhub.py:26
+    env: FINNHUB_RATE_LIMIT_SECONDS
+    default: 1.0
+
+  # --- Paths / ports ----------------------------------------------------------
+  config:paths.backend_dir:
+    current: start.sh:40   # /home/fire/ceo-tracker/backend (absolute)
+    recommended: "derive from script location"
+    issues: [CONFIG-009]
+  config:paths.frontend_dir:
+    current: start.sh:41
+    recommended: "derive from script location"
+    issues: [CONFIG-009]
+  config:ports.backend:
+    current: 8000   # Dockerfile/compose/main/nginx/vite/start.sh
+    env: BACKEND_PORT
+    default: 8000
+    issues: [CONFIG-009]
+  config:ports.frontend:
+    current: 3000   # vite/compose/start.sh
+    env: FRONTEND_PORT
+    default: 3000
+    issues: [CONFIG-009]
+
+  # --- Frontend constants -----------------------------------------------------
+  config:frontend.sentiment_colors:
+    current: frontend/src/utils/formatters.ts:28   # duplicated text + bg maps
+    recommended: "single token map in a theme config"
+    issues: [CONFIG-010]
+  config:frontend.polling.task_status_ms:
+    current: frontend/src/utils/constants.ts:18    # 2000
+    default: 2000
+  config:frontend.polling.feed_status_ms:
+    current: frontend/src/utils/constants.ts:19    # 10000
+    default: 10000
+
+# -----------------------------------------------------------------------------
+# Seed data (currently duplicated across 3 places)
+# -----------------------------------------------------------------------------
+seed_data:
+  description: >
+    Companies + CEOs are defined in THREE places that must stay in sync:
+    init_db.py, feeds.yaml, and beat_config.py. Target: single source.
+  sources_of_truth_today:
+    - backend/init_db.py:31        # companies + CEOs (CONFIG-002)
+    - backend/config/feeds.yaml:4  # feed -> ticker mapping (CONFIG-003)
+    - backend/workers/beat_config.py:9  # duplicate feed list (CONFIG-004)
+  target: "One seed spec (e.g. seed/companies.yaml) consumed by init_db, feeds, and beat."
