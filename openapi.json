@@ -1,0 +1,1445 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CEO Tracker",
+    "description": "Track CEO speeches and news for company mentions and sentiment",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Read Root",
+        "description": "Root endpoint with API information.",
+        "operationId": "read_root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Health check endpoint.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/mentions": {
+      "get": {
+        "tags": [
+          "mentions"
+        ],
+        "summary": "Get Mentions",
+        "description": "Get paginated list of company mentions.\n\nFilters:\n- ceo_id: Filter by specific CEO\n- company_ticker: Filter by mentioned company ticker\n- sentiment: Filter by sentiment (positive/negative/neutral)",
+        "operationId": "get_mentions_api_mentions_get",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "ceo_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ceo Id"
+            }
+          },
+          {
+            "name": "company_ticker",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Company Ticker"
+            }
+          },
+          {
+            "name": "sentiment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sentiment"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentionListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/mentions/ceo/{ceo_id}": {
+      "get": {
+        "tags": [
+          "mentions"
+        ],
+        "summary": "Get Ceo Mentions",
+        "description": "Get all mentions by a specific CEO.",
+        "operationId": "get_ceo_mentions_api_mentions_ceo__ceo_id__get",
+        "parameters": [
+          {
+            "name": "ceo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Ceo Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MentionResponse"
+                  },
+                  "title": "Response Get Ceo Mentions Api Mentions Ceo  Ceo Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/mentions/company/{ticker}": {
+      "get": {
+        "tags": [
+          "mentions"
+        ],
+        "summary": "Get Company Mentions",
+        "description": "Get all mentions of a specific company by ticker.",
+        "operationId": "get_company_mentions_api_mentions_company__ticker__get",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticker"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MentionResponse"
+                  },
+                  "title": "Response Get Company Mentions Api Mentions Company  Ticker  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sentiment/summary/{ceo_id}": {
+      "get": {
+        "tags": [
+          "mentions"
+        ],
+        "summary": "Get Sentiment Summary",
+        "description": "Get sentiment breakdown for a specific CEO.",
+        "operationId": "get_sentiment_summary_api_sentiment_summary__ceo_id__get",
+        "parameters": [
+          {
+            "name": "ceo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Ceo Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ceos": {
+      "get": {
+        "tags": [
+          "ceos"
+        ],
+        "summary": "Get Ceos",
+        "description": "Get list of all tracked CEOs.",
+        "operationId": "get_ceos_api_ceos_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CEOResponse"
+                  },
+                  "type": "array",
+                  "title": "Response Get Ceos Api Ceos Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ceos/{ceo_id}": {
+      "get": {
+        "tags": [
+          "ceos"
+        ],
+        "summary": "Get Ceo",
+        "description": "Get details of a specific CEO.",
+        "operationId": "get_ceo_api_ceos__ceo_id__get",
+        "parameters": [
+          {
+            "name": "ceo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Ceo Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CEOResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/companies": {
+      "get": {
+        "tags": [
+          "companies"
+        ],
+        "summary": "Get Companies",
+        "description": "Get list of all companies.",
+        "operationId": "get_companies_api_companies_get",
+        "parameters": [
+          {
+            "name": "is_tracked",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "title": "Is Tracked"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CompanyResponse"
+                  },
+                  "title": "Response Get Companies Api Companies Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/companies/{company_id}": {
+      "get": {
+        "tags": [
+          "companies"
+        ],
+        "summary": "Get Company",
+        "description": "Get details of a specific company.",
+        "operationId": "get_company_api_companies__company_id__get",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Company Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/companies/ticker/{ticker}": {
+      "get": {
+        "tags": [
+          "companies"
+        ],
+        "summary": "Get Company By Ticker",
+        "description": "Get a company by its ticker symbol.",
+        "operationId": "get_company_by_ticker_api_companies_ticker__ticker__get",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticker"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dashboard": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Get Dashboard Stats",
+        "description": "Get overall dashboard statistics.",
+        "operationId": "get_dashboard_stats_api_dashboard_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardStats"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/timeline": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Get Timeline",
+        "description": "Get chronological feed of mentions.",
+        "operationId": "get_timeline_api_timeline_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dashboard/sentiment/{sentiment}": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Get Sentiment Companies",
+        "description": "Get companies mentioned with specific sentiment.",
+        "operationId": "get_sentiment_companies_api_dashboard_sentiment__sentiment__get",
+        "parameters": [
+          {
+            "name": "sentiment",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sentiment"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ingest": {
+      "post": {
+        "tags": [
+          "ingest"
+        ],
+        "summary": "Ingest Text",
+        "description": "Manually ingest text for analysis.\n\nThis endpoint allows manual submission of text (e.g., CEO quotes, press releases)\nfor NER and sentiment analysis.",
+        "operationId": "ingest_text_api_ingest_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ingest/test": {
+      "post": {
+        "tags": [
+          "ingest"
+        ],
+        "summary": "Test Ingestion",
+        "description": "Test endpoint that ingests a sample text.",
+        "operationId": "test_ingestion_api_ingest_test_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ingest/status": {
+      "get": {
+        "tags": [
+          "ingest"
+        ],
+        "summary": "Get Ingestion Status",
+        "description": "Get ingestion status statistics.",
+        "operationId": "get_ingestion_status_api_ingest_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/feeds/config": {
+      "get": {
+        "tags": [
+          "feeds"
+        ],
+        "summary": "Get Feed Config",
+        "description": "Get all configured RSS feeds.\n\nReturns a list of all RSS feed configurations.",
+        "operationId": "get_feed_config_api_feeds_config_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/feeds/status": {
+      "get": {
+        "tags": [
+          "feeds"
+        ],
+        "summary": "Get Feeds Status",
+        "description": "Get status of all RSS feeds including entry counts.\n\nReturns statistics about each feed including how many entries\nhave been processed from each source.",
+        "operationId": "get_feeds_status_api_feeds_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/feeds/trigger": {
+      "post": {
+        "tags": [
+          "feeds"
+        ],
+        "summary": "Trigger Feed",
+        "description": "Manually trigger fetch for a single RSS feed.\n\nThis is useful for testing or immediate updates.\nThe task runs in the background.",
+        "operationId": "trigger_feed_api_feeds_trigger_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriggerFeedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerFeedResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/feeds/refresh": {
+      "post": {
+        "tags": [
+          "feeds"
+        ],
+        "summary": "Refresh All Feeds",
+        "description": "Refresh all RSS feeds immediately.\n\nTriggers background processing for all configured feeds.",
+        "operationId": "refresh_all_feeds_api_feeds_refresh_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshFeedsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/feeds/test": {
+      "post": {
+        "tags": [
+          "feeds"
+        ],
+        "summary": "Test Feed Fetch",
+        "description": "Test endpoint to fetch and preview a single feed without saving.\n\nUseful for debugging feed configuration.",
+        "operationId": "test_feed_fetch_api_feeds_test_post",
+        "parameters": [
+          {
+            "name": "feed_key",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Feed Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/feeds/stats": {
+      "get": {
+        "tags": [
+          "feeds"
+        ],
+        "summary": "Get Feed Statistics",
+        "description": "Get aggregate statistics about feed ingestion.\n\nReturns totals and breakdowns by provider.",
+        "operationId": "get_feed_statistics_api_feeds_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CEOResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "company_id": {
+            "type": "integer",
+            "title": "Company Id"
+          },
+          "company_name": {
+            "type": "string",
+            "title": "Company Name"
+          },
+          "company_ticker": {
+            "type": "string",
+            "title": "Company Ticker"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "twitter_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Twitter Handle"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "company_id",
+          "company_name",
+          "company_ticker",
+          "title",
+          "twitter_handle"
+        ],
+        "title": "CEOResponse",
+        "description": "Response model for a CEO."
+      },
+      "CompanyResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticker"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "is_tracked": {
+            "type": "boolean",
+            "title": "Is Tracked"
+          },
+          "sector": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sector"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "ticker",
+          "name",
+          "is_tracked",
+          "sector",
+          "industry"
+        ],
+        "title": "CompanyResponse",
+        "description": "Response model for a company."
+      },
+      "DashboardStats": {
+        "properties": {
+          "total_mentions": {
+            "type": "integer",
+            "title": "Total Mentions"
+          },
+          "total_ceos": {
+            "type": "integer",
+            "title": "Total Ceos"
+          },
+          "total_companies": {
+            "type": "integer",
+            "title": "Total Companies"
+          },
+          "sentiment_breakdown": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Sentiment Breakdown"
+          },
+          "recent_mentions": {
+            "type": "integer",
+            "title": "Recent Mentions"
+          },
+          "most_mentioned_companies": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Most Mentioned Companies"
+          },
+          "most_active_ceos": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Most Active Ceos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_mentions",
+          "total_ceos",
+          "total_companies",
+          "sentiment_breakdown",
+          "recent_mentions",
+          "most_mentioned_companies",
+          "most_active_ceos"
+        ],
+        "title": "DashboardStats",
+        "description": "Dashboard statistics model."
+      },
+      "FeedListResponse": {
+        "properties": {
+          "feeds": {
+            "items": {
+              "$ref": "#/components/schemas/FeedStatusResponse"
+            },
+            "type": "array",
+            "title": "Feeds"
+          },
+          "total_feeds": {
+            "type": "integer",
+            "title": "Total Feeds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feeds",
+          "total_feeds"
+        ],
+        "title": "FeedListResponse",
+        "description": "Response model for feed list."
+      },
+      "FeedStatusResponse": {
+        "properties": {
+          "feed_key": {
+            "type": "string",
+            "title": "Feed Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "ticker": {
+            "type": "string",
+            "title": "Ticker"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "last_fetched": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Fetched"
+          },
+          "entries_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entries Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feed_key",
+          "name",
+          "ticker",
+          "url",
+          "provider"
+        ],
+        "title": "FeedStatusResponse",
+        "description": "Response model for feed status."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "IngestRequest": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "ceo_id": {
+            "type": "integer",
+            "title": "Ceo Id"
+          },
+          "source_type": {
+            "type": "string",
+            "title": "Source Type",
+            "default": "manual"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "ceo_id"
+        ],
+        "title": "IngestRequest",
+        "description": "Request model for manual ingestion."
+      },
+      "IngestResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "mentions_created": {
+            "type": "integer",
+            "title": "Mentions Created"
+          },
+          "speech_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speech Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "message",
+          "mentions_created"
+        ],
+        "title": "IngestResponse",
+        "description": "Response model for ingestion results."
+      },
+      "MentionListResponse": {
+        "properties": {
+          "mentions": {
+            "items": {
+              "$ref": "#/components/schemas/MentionResponse"
+            },
+            "type": "array",
+            "title": "Mentions"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mentions",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "MentionListResponse",
+        "description": "Response model for a list of mentions."
+      },
+      "MentionResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "ceo_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ceo Id"
+          },
+          "ceo_name": {
+            "type": "string",
+            "title": "Ceo Name"
+          },
+          "ceo_company": {
+            "type": "string",
+            "title": "Ceo Company"
+          },
+          "mentioned_company": {
+            "type": "string",
+            "title": "Mentioned Company"
+          },
+          "mentioned_ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mentioned Ticker"
+          },
+          "context": {
+            "type": "string",
+            "title": "Context"
+          },
+          "sentiment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sentiment"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "relationship_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relationship Type"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "ceo_id",
+          "ceo_name",
+          "ceo_company",
+          "mentioned_company",
+          "mentioned_ticker",
+          "context",
+          "sentiment",
+          "confidence",
+          "relationship_type",
+          "created_at"
+        ],
+        "title": "MentionResponse",
+        "description": "Response model for a company mention."
+      },
+      "RefreshFeedsResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "total_entries": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Entries"
+          },
+          "total_mentions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Mentions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "title": "RefreshFeedsResponse",
+        "description": "Response model for refreshing all feeds."
+      },
+      "TriggerFeedRequest": {
+        "properties": {
+          "feed_key": {
+            "type": "string",
+            "title": "Feed Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feed_key"
+        ],
+        "title": "TriggerFeedRequest",
+        "description": "Request model for triggering a single feed."
+      },
+      "TriggerFeedResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "title": "TriggerFeedResponse",
+        "description": "Response model for feed trigger."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
