@@ -55,9 +55,13 @@ dist-ssr/
 # Frontend env (keep .env.example)
 frontend/.env
 
-# ---- Models / caches ----
+# ---- ML caches (scoped; do NOT match backend/app/models/) ----
 .cache/
-models/
+# Only ignore downloaded model weight files, not source packages named "models":
+*.bin
+*.pt
+*.onnx
+*.safetensors
 
 # ---- Editors / IDE ----
 .vscode/

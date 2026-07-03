@@ -38,18 +38,11 @@ jobs:
       - name: Ruff
         run: ruff check .
 
-      # Standalone import smoke (unmasked) — surfaces the real traceback if the
-      # app or models fail to import, before pytest's conftest masking kicks in.
+      # Standalone import smoke — fails fast with an unmasked traceback if the
+      # app or models can't be imported (catches missing files / bad imports
+      # before pytest's conftest masking obscures the cause).
       - name: Import smoke
-        run: |
-          set +e
-          which python
-          python -c "import os,sys;print('cwd=',os.getcwd());print('sys.path[:6]=',sys.path[:6])"
-          python -c "import app;print('app.__file__=',getattr(app,'__file__',None));print('app.__path__=',list(getattr(app,'__path__',[])))"
-          python -c "import app.models as m;print('models OK',m.__file__)"
-          python -c "from app.main import app;print('main OK')"
-          echo "--- ls app/models (from cwd) ---"; ls -la app/models 2>&1 | head
-          exit 0
+        run: python -c "from app.main import app; print('app import OK')"
 
       - name: Pytest
         run: pytest
